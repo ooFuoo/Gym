@@ -2,23 +2,22 @@
 
 面向连锁健身房的会员办卡订单管理后台，用于登录后台、新建订单、查询和筛选订单、续卡、撤单，以及为财务导出可对账的订单数据。
 
-当前仓库是可运行的空白工程骨架，业务功能尚待实现。完整需求基线见 [docs/REQUIREMENTS.md](./docs/REQUIREMENTS.md)。
+当前已完成 React 18 + JavaScript 工程迁移、基础工具链配置和页面视觉 Demo。登录、订单列表、新建订单、404 与后台布局均可预览，业务数据和复杂操作逻辑尚待实现。完整需求基线见 [docs/REQUIREMENTS.md](./docs/REQUIREMENTS.md)。
 
 ## 目标技术栈
 
-| 类别 | 选型 |
-| --- | --- |
-| 框架 | React 18 |
-| 构建 | Vite |
-| 路由 | React Router v7 |
-| UI 组件库 | Ant Design v5 |
-| HTTP 请求 | Axios |
-| 全局状态 | Zustand |
-| 语言 | JavaScript |
-| 样式 | CSS Modules（可按实际实现调整） |
-| 工程化 | ESLint + Prettier |
-
-> 当前空白骨架仍使用 React 19 和 TypeScript；正式开发前需迁移到上述 React 18 + JavaScript 技术栈。
+| 类别      | 选型                            |
+| --------- | ------------------------------- |
+| 框架      | React 18                        |
+| 构建      | Vite                            |
+| 路由      | React Router v7                 |
+| UI 组件库 | Ant Design v5                   |
+| HTTP 请求 | Axios                           |
+| 全局状态  | Zustand                         |
+| 语言      | JavaScript                      |
+| 样式      | CSS Modules（可按实际实现调整） |
+| 工程化    | ESLint + Prettier               |
+| 单元测试  | Vitest                          |
 
 ## 启动步骤
 
@@ -40,11 +39,11 @@ npm run dev
 
 ```bash
 npm run lint
+npm run format:check
+npm run test
 npm run build
 npm run preview
 ```
-
-迁移完成后还将增加 Prettier 检查脚本。
 
 ## 目录结构说明
 
@@ -55,34 +54,27 @@ Gym/
 ├── docs/
 │   └── REQUIREMENTS.md     # 产品与工程需求基线
 ├── src/
-│   ├── App.tsx             # 当前空白根组件，迁移后改为 App.jsx
-│   └── main.tsx            # 当前应用入口，迁移后改为 main.jsx
+│   ├── api/                # Axios 实例、拦截器和订单 API
+│   ├── components/         # 可复用组件
+│   ├── layouts/            # 后台整体布局
+│   ├── mocks/              # 初始数据和可写内存 Mock 服务
+│   ├── pages/
+│   │   ├── Login/          # 登录页
+│   │   ├── Orders/         # 订单列表页
+│   │   ├── OrderCreate/    # 新建订单页
+│   │   └── NotFound/       # 404 页
+│   ├── router/             # 路由表和登录守卫
+│   ├── stores/             # Zustand 状态
+│   ├── utils/              # 金额、CSV、日期等工具
+│   ├── App.jsx             # 当前空白根组件
+│   └── main.jsx            # React 应用入口
 ├── AGENTS.md               # 项目协作规则
 ├── CHANGELOG.md            # 开发进度记录
 ├── README.md               # 项目说明与关键决策
 ├── index.html              # Vite HTML 入口
 ├── package.json            # 依赖和脚本
-└── vite.config.ts          # 当前 Vite 配置，迁移后改为 JavaScript
-```
-
-计划中的业务结构：
-
-```text
-src/
-├── api/                    # Axios 实例、拦截器和订单 API
-├── components/             # 可复用组件
-├── layouts/                # 后台整体布局
-├── mocks/                  # 初始数据和可写内存 Mock 服务
-├── pages/
-│   ├── Login/              # 登录页
-│   ├── Orders/             # 订单列表页
-│   ├── OrderCreate/        # 新建订单页
-│   └── NotFound/           # 404 页
-├── router/                 # 路由表和登录守卫
-├── stores/                 # Zustand 状态
-├── utils/                  # 金额、CSV、日期等工具
-├── App.jsx
-└── main.jsx
+├── vite.config.js          # Vite 配置
+└── vitest.config.js        # Vitest 配置
 ```
 
 ## 请求层与状态管理设计简述
@@ -198,15 +190,15 @@ src/
 
 ## 开发工具及使用环节
 
-| 工具 | 使用环节 |
-| --- | --- |
-| Codex | 分析需求、实现功能、维护文档并执行质量检查 |
-| Git | 暂存每次改动，供用户检查后手动提交和后续回滚 |
-| npm | 安装和锁定依赖，运行开发、检查、构建脚本 |
-| Vite | 本地开发、热更新和生产构建 |
-| ESLint | 静态检查 JavaScript、React Hooks 和潜在问题 |
-| Prettier | 统一 JavaScript、样式和文档格式 |
-| 浏览器开发者工具 | 检查布局、路由、网络请求、存储和运行时错误 |
+| 工具             | 使用环节                                     |
+| ---------------- | -------------------------------------------- |
+| Codex            | 分析需求、实现功能、维护文档并执行质量检查   |
+| Git              | 暂存每次改动，供用户检查后手动提交和后续回滚 |
+| npm              | 安装和锁定依赖，运行开发、检查、构建脚本     |
+| Vite             | 本地开发、热更新和生产构建                   |
+| ESLint           | 静态检查 JavaScript、React Hooks 和潜在问题  |
+| Prettier         | 统一 JavaScript、样式和文档格式              |
+| 浏览器开发者工具 | 检查布局、路由、网络请求、存储和运行时错误   |
 
 ## 变更记录与协作
 
