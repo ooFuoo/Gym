@@ -6,12 +6,15 @@ import {
   getBrowserStorage,
 } from './authStorage.js'
 import { mockAdapter } from '../mocks/mockAdapter.js'
+import { useAuthStore } from '../stores/authStore.js'
 
 function defaultErrorNotifier(errorMessage) {
   message.error(errorMessage)
 }
 
 function defaultUnauthorizedHandler() {
+  useAuthStore.getState().logout()
+
   if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
     window.location.assign('/login')
   }

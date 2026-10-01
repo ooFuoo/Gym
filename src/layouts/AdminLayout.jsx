@@ -8,6 +8,7 @@ import {
   Typography,
 } from 'antd'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { useAuthStore } from '../stores/authStore.js'
 
 const { Header, Sider, Content } = Layout
 
@@ -32,7 +33,14 @@ const pageMeta = {
 function AdminLayout() {
   const location = useLocation()
   const navigate = useNavigate()
+  const username = useAuthStore((state) => state.username)
+  const logout = useAuthStore((state) => state.logout)
   const currentPage = pageMeta[location.pathname] ?? pageMeta['/orders']
+
+  function handleLogout() {
+    logout()
+    navigate('/login', { replace: true })
+  }
 
   return (
     <Layout className="admin-shell">
@@ -82,13 +90,13 @@ function AdminLayout() {
           </div>
           <Space size={12}>
             <div className="header-user">
-              <Avatar size={36}>林</Avatar>
+              <Avatar size={36}>{username.slice(0, 1)}</Avatar>
               <div>
-                <strong>林晓雯</strong>
+                <strong>{username}</strong>
                 <span>运营专员</span>
               </div>
             </div>
-            <Button type="text" onClick={() => navigate('/login')}>
+            <Button type="text" onClick={handleLogout}>
               退出登录
             </Button>
           </Space>

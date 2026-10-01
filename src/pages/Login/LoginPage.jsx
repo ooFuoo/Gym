@@ -1,8 +1,19 @@
-import { Button, Checkbox, Form, Input, Typography } from 'antd'
-import { useNavigate } from 'react-router-dom'
+import { Button, Form, Input, Typography } from 'antd'
+import { useLocation, useNavigate } from 'react-router-dom'
+import { useAuthStore } from '../../stores/authStore.js'
 
 function LoginPage() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const login = useAuthStore((state) => state.login)
+
+  function handleLogin(values) {
+    login(values)
+    const targetPath = location.state?.from?.pathname
+    navigate(targetPath && targetPath !== '/login' ? targetPath : '/orders', {
+      replace: true,
+    })
+  }
 
   return (
     <main className="login-page">
@@ -46,11 +57,7 @@ function LoginPage() {
             输入任意非空账号和密码即可预览系统。
           </Typography.Paragraph>
 
-          <Form
-            layout="vertical"
-            size="large"
-            onFinish={() => navigate('/orders')}
-          >
+          <Form layout="vertical" size="large" onFinish={handleLogin}>
             <Form.Item
               label="登录账号"
               name="username"
@@ -69,7 +76,9 @@ function LoginPage() {
               />
             </Form.Item>
             <div className="login-options">
-              <Checkbox>记住账号</Checkbox>
+              <Typography.Text type="secondary">
+                登录状态将保存在本机
+              </Typography.Text>
               <Typography.Text type="secondary">模拟登录环境</Typography.Text>
             </div>
             <Button
