@@ -263,6 +263,9 @@ textarea {
 .orders-panel .ant-table-wrapper {
   padding: 0 24px 4px;
 }
+.orders-alert {
+  margin: 0 24px 18px;
+}
 .orders-panel .ant-table {
   border-top: 1px solid #eceef1;
 }

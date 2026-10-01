@@ -1,5 +1,7 @@
 import {
+  Alert,
   Button,
+  Empty,
   Form,
   Input,
   Modal,
@@ -10,73 +12,32 @@ import {
   Tag,
   Typography,
 } from 'antd'
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { queryOrders } from '../../api/orders.js'
+import {
+  ORDER_STATUS,
+  ORDER_STATUS_GROUP,
+  formatOrderAmount,
+} from '../../domain/orderRules.js'
+
+const PAGE_SIZE = 10
 
 const statusColors = {
-  待审核: 'gold',
-  待制卡: 'blue',
-  待寄卡: 'cyan',
-  已完成: 'green',
-  已到期: 'default',
-  已取消: 'red',
+  [ORDER_STATUS.PENDING_REVIEW]: 'gold',
+  [ORDER_STATUS.PENDING_CARD]: 'blue',
+  [ORDER_STATUS.PENDING_SHIPMENT]: 'cyan',
+  [ORDER_STATUS.COMPLETED]: 'green',
+  [ORDER_STATUS.EXPIRED]: 'default',
+  [ORDER_STATUS.CANCELLED]: 'red',
 }
 
-const orders = [
-  {
-    key: '1',
-    orderNo: 'GYM202610010036',
-    memberName: '周予安',
-    years: 3,
-    amount: 3600,
-    status: '待审核',
-    createdAt: '2026-10-01 10:42:18',
-  },
-  {
-    key: '2',
-    orderNo: 'GYM202610010035',
-    memberName: '沈清禾',
-    years: 5,
-    amount: 6000,
-    status: '待制卡',
-    createdAt: '2026-10-01 09:36:04',
-  },
-  {
-    key: '3',
-    orderNo: 'GYM202609300034',
-    memberName: '程屿',
-    years: 2,
-    amount: 2400,
-    status: '待寄卡',
-    createdAt: '2026-09-30 17:12:51',
-  },
-  {
-    key: '4',
-    orderNo: 'GYM202609300033',
-    memberName: '许知夏',
-    years: 8,
-    amount: 8640,
-    status: '已到期',
-    createdAt: '2026-09-30 14:08:26',
-  },
-  {
-    key: '5',
-    orderNo: 'GYM202609290032',
-    memberName: '陆时越',
-    years: 1,
-    amount: 1200,
-    status: '已完成',
-    createdAt: '2026-09-29 16:55:39',
-  },
-  {
-    key: '6',
-    orderNo: 'GYM202609280031',
-    memberName: '顾南乔',
-    years: 3,
-    amount: null,
-    status: '已取消',
-    createdAt: '2026-09-28 11:21:07',
-  },
+const tabItems = [
+  { key: ORDER_STATUS_GROUP.ALL, label: '全部' },
+  { key: ORDER_STATUS_GROUP.ACTIVE, label: '进行中' },
+  { key: ORDER_STATUS_GROUP.EXPIRED, label: '已到期' },
+  { key: ORDER_STATUS_GROUP.COMPLETED, label: '已完成' },
+  { key: ORDER_STATUS_GROUP.CANCELLED, label: '已取消' },
 ]
 
 const columns = [
@@ -99,11 +60,7 @@ const columns = [
     width: 120,
     align: 'right',
     render: (value) => (
-      <span className="amount-cell">
-        {value == null
-          ? '--'
-          : value.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
-      </span>
+      <span className="amount-cell">{formatOrderAmount(value)}</span>
     ),
   },
   {
@@ -119,7 +76,7 @@ const columns = [
     fixed: 'right',
     width: 92,
     render: (status) =>
-      status === '已到期' ? (
+      status === ORDER_STATUS.EXPIRED ? (
         <Button type="link">续卡</Button>
       ) : (
         <span className="muted">暂无</span>
@@ -127,17 +84,136 @@ const columns = [
   },
 ]
 
-const tabItems = [
-  { key: 'all', label: '全部 36' },
-  { key: 'active', label: '进行中 18' },
-  { key: 'expired', label: '已到期 6' },
-  { key: 'completed', label: '已完成 9' },
-  { key: 'cancelled', label: '已取消 3' },
-]
+const emptyFilters = Object.freeze({ memberName: '', orderNo: '' })
+
+function normalizeSearchValues(values) {
+  return {
+    memberName: String(values.memberName ?? '').trim(),
+    orderNo: String(values.orderNo ?? '').trim(),
+  }
+}
 
 function OrdersPage() {
+  const [form] = Form.useForm()
+  const [orders, setOrders] = useState([])
+  const [statusGroup, setStatusGroup] = useState(ORDER_STATUS_GROUP.ALL)
+  const [filters, setFilters] = useState(emptyFilters)
+  const [page, setPage] = useState(1)
+  const [total, setTotal] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [errorMessage, setErrorMessage] = useState('')
+  const [selectedRowKeys, setSelectedRowKeys] = useState([])
   const [renewOpen, setRenewOpen] = useState(false)
-  const [selectedRowKeys, setSelectedRowKeys] = useState(['4'])
+  const [summary, setSummary] = useState({
+    all: null,
+    active: null,
+    expired: null,
+  })
+
+  useEffect(() => {
+    let active = true
+
+    async function loadOrders() {
+      setLoading(true)
+      setErrorMessage('')
+
+      try {
+        const result = await queryOrders({
+          ...filters,
+          page,
+          pageSize: PAGE_SIZE,
+          statusGroup,
+        })
+
+        if (!active) return
+        setOrders(result.items)
+        setTotal(result.total)
+      } catch (error) {
+        if (!active) return
+        setOrders([])
+        setTotal(0)
+        setErrorMessage(
+          error.response?.data?.message ?? '订单加载失败，请稍后重试',
+        )
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+
+    loadOrders()
+    return () => {
+      active = false
+    }
+  }, [filters, page, statusGroup])
+
+  useEffect(() => {
+    let active = true
+
+    async function loadSummary() {
+      try {
+        const [all, ongoing, expired] = await Promise.all([
+          queryOrders({
+            page: 1,
+            pageSize: 1,
+            statusGroup: ORDER_STATUS_GROUP.ALL,
+          }),
+          queryOrders({
+            page: 1,
+            pageSize: 1,
+            statusGroup: ORDER_STATUS_GROUP.ACTIVE,
+          }),
+          queryOrders({
+            page: 1,
+            pageSize: 1,
+            statusGroup: ORDER_STATUS_GROUP.EXPIRED,
+          }),
+        ])
+
+        if (active) {
+          setSummary({
+            all: all.total,
+            active: ongoing.total,
+            expired: expired.total,
+          })
+        }
+      } catch {
+        if (active) setSummary({ all: null, active: null, expired: null })
+      }
+    }
+
+    loadSummary()
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const selectedSummary = useMemo(
+    () => selectedRowKeys.slice(0, 3).join('、'),
+    [selectedRowKeys],
+  )
+
+  function clearSelection() {
+    setSelectedRowKeys([])
+  }
+
+  function handleTabChange(nextStatusGroup) {
+    setStatusGroup(nextStatusGroup)
+    setPage(1)
+    clearSelection()
+  }
+
+  function handleSearch(values) {
+    setFilters(normalizeSearchValues(values))
+    setPage(1)
+    clearSelection()
+  }
+
+  function handleReset() {
+    form.resetFields()
+    setFilters(emptyFilters)
+    setPage(1)
+    clearSelection()
+  }
 
   return (
     <section className="page-stack">
@@ -157,43 +233,63 @@ function OrdersPage() {
 
       <div className="metric-strip" aria-label="订单概览">
         <div>
-          <span>今日新增</span>
-          <strong>12</strong>
-          <small>较昨日 +3</small>
+          <span>全部订单</span>
+          <strong>{summary.all ?? '--'}</strong>
+          <small>Mock 数据总量</small>
         </div>
         <div>
           <span>进行中</span>
-          <strong>18</strong>
-          <small>8 笔待审核</small>
+          <strong>{summary.active ?? '--'}</strong>
+          <small>等待业务处理</small>
         </div>
         <div>
           <span>已到期</span>
-          <strong>06</strong>
+          <strong>{summary.expired ?? '--'}</strong>
           <small>可发起续卡</small>
         </div>
       </div>
 
       <div className="content-panel orders-panel">
-        <Tabs items={tabItems} defaultActiveKey="all" className="order-tabs" />
-        <Form layout="inline" className="filter-bar">
-          <Form.Item label="订单号">
+        <Tabs
+          items={tabItems}
+          activeKey={statusGroup}
+          onChange={handleTabChange}
+          className="order-tabs"
+        />
+
+        <Form
+          form={form}
+          layout="inline"
+          className="filter-bar"
+          onFinish={handleSearch}
+        >
+          <Form.Item label="订单号" name="orderNo">
             <Input placeholder="请输入完整订单号" allowClear />
           </Form.Item>
-          <Form.Item label="会员姓名">
+          <Form.Item label="会员姓名" name="memberName">
             <Input placeholder="请输入会员姓名" allowClear />
           </Form.Item>
           <Form.Item>
             <Space>
-              <Button type="primary">查询</Button>
-              <Button>重置</Button>
+              <Button type="primary" htmlType="submit">
+                查询
+              </Button>
+              <Button onClick={handleReset}>重置</Button>
             </Space>
           </Form.Item>
         </Form>
 
         <div className="table-toolbar">
           <Space wrap>
-            <Button onClick={() => setRenewOpen(true)}>批量续卡</Button>
-            <Button danger>一键撤单</Button>
+            <Button
+              disabled={selectedRowKeys.length === 0}
+              onClick={() => setRenewOpen(true)}
+            >
+              批量续卡
+            </Button>
+            <Button danger disabled={selectedRowKeys.length === 0}>
+              一键撤单
+            </Button>
             <Typography.Text type="secondary">
               已选择 {selectedRowKeys.length} 项
             </Typography.Text>
@@ -201,9 +297,28 @@ function OrdersPage() {
           <Button>导出 CSV</Button>
         </div>
 
+        {errorMessage ? (
+          <Alert
+            type="error"
+            showIcon
+            message={errorMessage}
+            className="orders-alert"
+          />
+        ) : null}
+
         <Table
+          rowKey="orderNo"
           columns={columns}
           dataSource={orders}
+          loading={loading}
+          locale={{
+            emptyText: (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description="暂无符合条件的订单"
+              />
+            ),
+          }}
           rowSelection={{
             selectedRowKeys,
             onChange: setSelectedRowKeys,
@@ -211,10 +326,12 @@ function OrdersPage() {
           }}
           scroll={{ x: 1050 }}
           pagination={{
-            current: 1,
-            total: 36,
-            pageSize: 10,
+            current: page,
+            total,
+            pageSize: PAGE_SIZE,
             showSizeChanger: false,
+            showTotal: (value) => `共 ${value} 条`,
+            onChange: setPage,
           }}
         />
       </div>
@@ -228,8 +345,11 @@ function OrdersPage() {
         cancelText="取消"
       >
         <div className="renew-summary">
-          <span>已选择 1 笔到期订单</span>
-          <strong>GYM202609300033</strong>
+          <span>已选择 {selectedRowKeys.length} 笔订单</span>
+          <strong>
+            {selectedSummary}
+            {selectedRowKeys.length > 3 ? ' 等' : ''}
+          </strong>
         </div>
         <Form layout="vertical">
           <Form.Item label="续卡年限" required>
@@ -249,7 +369,7 @@ function OrdersPage() {
           </div>
           <div>
             <span>本次总费用</span>
-            <strong>4,800.00 元</strong>
+            <strong>待确认</strong>
           </div>
         </div>
       </Modal>
