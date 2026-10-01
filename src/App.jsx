@@ -31,7 +31,7 @@ const theme = {
 function App() {
   return (
     <ConfigProvider theme={theme}>
-      <BrowserRouter>
+      <BrowserRouter basename="/Gym/">
         <AppRouter />
       </BrowserRouter>
     </ConfigProvider>
