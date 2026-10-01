@@ -7,6 +7,7 @@ import {
   Space,
   Typography,
 } from 'antd'
+import { useState } from 'react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore.js'
 
@@ -31,6 +32,7 @@ const pageMeta = {
 }
 
 function AdminLayout() {
+  const [collapsed, setCollapsed] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
   const username = useAuthStore((state) => state.username)
@@ -47,37 +49,70 @@ function AdminLayout() {
       <Sider
         width={232}
         breakpoint="lg"
-        collapsedWidth={72}
+        collapsedWidth={80}
+        collapsible
+        collapsed={collapsed}
+        onCollapse={setCollapsed}
+        trigger={null}
         className="admin-sider"
       >
-        <Link
-          to="/orders"
+        <div
           className="brand-lockup"
-          aria-label="GymFlow 订单中心"
+          style={collapsed ? { gap: 4, padding: '0 4px' } : undefined}
         >
-          <span className="brand-mark" aria-hidden="true">
-            GF
-          </span>
-          <span className="brand-copy">
-            <strong>GymFlow</strong>
-            <small>会员订单中心</small>
-          </span>
-        </Link>
+          <Link
+            to="/orders"
+            aria-label="GymFlow 订单中心"
+            style={{ display: 'flex', alignItems: 'center', gap: 12 }}
+          >
+            <span className="brand-mark" aria-hidden="true">
+              GF
+            </span>
+            {!collapsed ? (
+              <span className="brand-copy">
+                <strong>GymFlow</strong>
+                <small>会员订单中心</small>
+              </span>
+            ) : null}
+          </Link>
+          <Button
+            type="text"
+            aria-label={collapsed ? '展开侧边菜单' : '折叠侧边菜单'}
+            title={collapsed ? '展开侧边菜单' : '折叠侧边菜单'}
+            onClick={() => setCollapsed((value) => !value)}
+            style={{
+              width: 30,
+              minWidth: 30,
+              marginLeft: collapsed ? 0 : 'auto',
+              padding: 0,
+              color: '#b9bdc6',
+              fontSize: 18,
+            }}
+          >
+            <span aria-hidden="true">☰</span>
+          </Button>
+        </div>
 
         <nav aria-label="后台主导航">
-          <Typography.Text className="menu-caption">业务管理</Typography.Text>
+          {!collapsed ? (
+            <Typography.Text className="menu-caption">业务管理</Typography.Text>
+          ) : null}
           <Menu
             mode="inline"
+            inlineCollapsed={collapsed}
             items={menuItems}
             selectedKeys={[location.pathname]}
             className="admin-menu"
+            style={collapsed ? { padding: '0 8px' } : undefined}
           />
         </nav>
 
-        <div className="sider-footnote">
-          <span>今日待处理</span>
-          <strong>08</strong>
-        </div>
+        {!collapsed ? (
+          <div className="sider-footnote">
+            <span>今日待处理</span>
+            <strong>08</strong>
+          </div>
+        ) : null}
       </Sider>
 
       <Layout>

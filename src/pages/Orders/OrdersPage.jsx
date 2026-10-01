@@ -301,7 +301,7 @@ function OrdersPage() {
       title: `确认撤销所选 ${orderNos.length} 笔订单？`,
       content: (
         <div className="cancel-confirm-content">
-          <p>全部订单均符合条件时才会整批撤单，否则不会修改任何订单。</p>
+          <p>全部订单均符合条件(待制卡,待寄卡状态的订单)才会整批撤单，否则不会修改任何订单。</p>
           <div className="order-number-list">{orderNos.join('、')}</div>
         </div>
       ),
