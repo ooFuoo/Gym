@@ -59,14 +59,14 @@ function LoginPage() {
 
           <Form layout="vertical" size="large" onFinish={handleLogin}>
             <Form.Item
-              label="登录账号"
+              label="登录账号(admin)"
               name="username"
               rules={[{ required: true, message: '请输入登录账号' }]}
             >
               <Input placeholder="请输入账号" autoComplete="username" />
             </Form.Item>
             <Form.Item
-              label="登录密码"
+              label="登录密码(123456)"
               name="password"
               rules={[{ required: true, message: '请输入登录密码' }]}
             >
