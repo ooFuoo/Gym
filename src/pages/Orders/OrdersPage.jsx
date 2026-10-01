@@ -23,8 +23,15 @@ import {
   calculateRenewalFee,
   formatOrderAmount,
 } from '../../domain/orderRules.js'
+import {
+  buildOrderCsv,
+  createOrderCsvFilename,
+  downloadOrderCsv,
+  getExportableOrders,
+} from '../../utils/orderCsv.js'
 
 const PAGE_SIZE = 10
+const EXPORT_PAGE_SIZE = Number.MAX_SAFE_INTEGER
 
 const statusColors = {
   [ORDER_STATUS.PENDING_REVIEW]: 'gold',
@@ -87,6 +94,7 @@ function OrdersPage() {
   const [renewalYears, setRenewalYears] = useState(1)
   const [renewSubmitting, setRenewSubmitting] = useState(false)
   const [cancelSubmitting, setCancelSubmitting] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const [refreshVersion, setRefreshVersion] = useState(0)
   const [summary, setSummary] = useState({
     all: null,
@@ -315,6 +323,35 @@ function OrdersPage() {
     })
   }
 
+  async function handleExport() {
+    setExporting(true)
+
+    try {
+      const result = await queryOrders({
+        ...filters,
+        page: 1,
+        pageSize: EXPORT_PAGE_SIZE,
+        statusGroup,
+      })
+      const exportableOrders = getExportableOrders(result.items)
+
+      if (exportableOrders.length === 0) {
+        message.warning('当前筛选条件下没有可导出的订单')
+        return
+      }
+
+      downloadOrderCsv(
+        buildOrderCsv(exportableOrders),
+        createOrderCsvFilename(),
+      )
+      message.success(`已导出 ${exportableOrders.length} 笔订单`)
+    } catch {
+      // 请求层统一展示错误提示。
+    } finally {
+      setExporting(false)
+    }
+  }
+
   return (
     <section className="page-stack">
       <div className="page-lead">
@@ -399,7 +436,9 @@ function OrdersPage() {
               已选择 {selectedRowKeys.length} 项
             </Typography.Text>
           </Space>
-          <Button>导出 CSV</Button>
+          <Button loading={exporting} onClick={handleExport}>
+            导出 CSV
+          </Button>
         </div>
 
         {errorMessage ? (
