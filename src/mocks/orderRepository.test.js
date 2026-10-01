@@ -71,6 +71,41 @@ describe('内存订单仓库', () => {
     expect(repository.getAll()).toHaveLength(37)
   })
 
+  it.each([
+    [
+      '姓名不足 2 个字符',
+      { memberName: '叶', phone: '13912345678', years: 1 },
+      'INVALID_MEMBER_NAME',
+    ],
+    [
+      '手机号格式错误',
+      { memberName: '叶星澜', phone: '12912345678', years: 1 },
+      'INVALID_PHONE',
+    ],
+    [
+      '购卡年限不是 1-10 的整数',
+      { memberName: '叶星澜', phone: '13912345678', years: 1.5 },
+      'INVALID_CARD_YEARS',
+    ],
+    [
+      '备注超过 200 个字符',
+      {
+        memberName: '叶星澜',
+        phone: '13912345678',
+        years: 1,
+        remark: '备注'.repeat(101),
+      },
+      'INVALID_REMARK',
+    ],
+  ])('拒绝%s', (_, payload, code) => {
+    const repository = createOrderRepository()
+
+    expect(() => repository.create(payload)).toThrowError(
+      expect.objectContaining({ code }),
+    )
+    expect(repository.getAll()).toHaveLength(36)
+  })
+
   it('续卡后后续查询能看到年限、累计金额和状态变更', () => {
     const repository = createOrderRepository()
     const expired = repository
