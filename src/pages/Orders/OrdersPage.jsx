@@ -4,6 +4,7 @@ import {
   Empty,
   Form,
   Input,
+  message,
   Modal,
   Select,
   Space,
@@ -12,12 +13,14 @@ import {
   Tag,
   Typography,
 } from 'antd'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { queryOrders } from '../../api/orders.js'
+import { cancelOrders, queryOrders, renewOrders } from '../../api/orders.js'
 import {
   ORDER_STATUS,
   ORDER_STATUS_GROUP,
+  calculateBatchRenewalTotal,
+  calculateRenewalFee,
   formatOrderAmount,
 } from '../../domain/orderRules.js'
 
@@ -40,50 +43,6 @@ const tabItems = [
   { key: ORDER_STATUS_GROUP.CANCELLED, label: '已取消' },
 ]
 
-const columns = [
-  {
-    title: '订单号',
-    dataIndex: 'orderNo',
-    width: 180,
-    render: (value) => <span className="order-number">{value}</span>,
-  },
-  { title: '会员姓名', dataIndex: 'memberName', width: 110 },
-  {
-    title: '购卡年限',
-    dataIndex: 'years',
-    width: 105,
-    render: (value) => `${value} 年`,
-  },
-  {
-    title: '订单金额',
-    dataIndex: 'amount',
-    width: 120,
-    align: 'right',
-    render: (value) => (
-      <span className="amount-cell">{formatOrderAmount(value)}</span>
-    ),
-  },
-  {
-    title: '状态',
-    dataIndex: 'status',
-    width: 100,
-    render: (status) => <Tag color={statusColors[status]}>{status}</Tag>,
-  },
-  { title: '创建时间', dataIndex: 'createdAt', width: 172 },
-  {
-    title: '操作',
-    dataIndex: 'status',
-    fixed: 'right',
-    width: 92,
-    render: (status) =>
-      status === ORDER_STATUS.EXPIRED ? (
-        <Button type="link">续卡</Button>
-      ) : (
-        <span className="muted">暂无</span>
-      ),
-  },
-]
-
 const emptyFilters = Object.freeze({ memberName: '', orderNo: '' })
 
 function normalizeSearchValues(values) {
@@ -91,6 +50,27 @@ function normalizeSearchValues(values) {
     memberName: String(values.memberName ?? '').trim(),
     orderNo: String(values.orderNo ?? '').trim(),
   }
+}
+
+function getBatchErrorOrderNos(error) {
+  const details = error.response?.data?.details
+  return details?.invalidOrderNos ?? details?.missingOrderNos ?? []
+}
+
+function showBatchError(action, error) {
+  const orderNos = getBatchErrorOrderNos(error)
+
+  if (orderNos.length === 0) return
+
+  Modal.error({
+    title: `${action}失败`,
+    content: (
+      <div className="batch-error-content">
+        <p>以下订单当前无法{action}，本次操作未修改任何订单：</p>
+        <div className="order-number-list">{orderNos.join('、')}</div>
+      </div>
+    ),
+  })
 }
 
 function OrdersPage() {
@@ -103,7 +83,11 @@ function OrdersPage() {
   const [loading, setLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState('')
   const [selectedRowKeys, setSelectedRowKeys] = useState([])
-  const [renewOpen, setRenewOpen] = useState(false)
+  const [renewTarget, setRenewTarget] = useState(null)
+  const [renewalYears, setRenewalYears] = useState(1)
+  const [renewSubmitting, setRenewSubmitting] = useState(false)
+  const [cancelSubmitting, setCancelSubmitting] = useState(false)
+  const [refreshVersion, setRefreshVersion] = useState(0)
   const [summary, setSummary] = useState({
     all: null,
     active: null,
@@ -144,7 +128,7 @@ function OrdersPage() {
     return () => {
       active = false
     }
-  }, [filters, page, statusGroup])
+  }, [filters, page, refreshVersion, statusGroup])
 
   useEffect(() => {
     let active = true
@@ -185,12 +169,64 @@ function OrdersPage() {
     return () => {
       active = false
     }
-  }, [])
+  }, [refreshVersion])
 
-  const selectedSummary = useMemo(
-    () => selectedRowKeys.slice(0, 3).join('、'),
-    [selectedRowKeys],
+  const renewalOrderNos = renewTarget?.orderNos ?? []
+  const renewalOrderSummary = renewalOrderNos.slice(0, 3).join('、')
+  const singleRenewalFee = calculateRenewalFee(renewalYears)
+  const batchRenewalTotal = calculateBatchRenewalTotal(
+    renewalOrderNos.length,
+    renewalYears,
   )
+
+  const columns = [
+    {
+      title: '订单号',
+      dataIndex: 'orderNo',
+      width: 180,
+      render: (value) => <span className="order-number">{value}</span>,
+    },
+    { title: '会员姓名', dataIndex: 'memberName', width: 110 },
+    {
+      title: '购卡年限',
+      dataIndex: 'years',
+      width: 105,
+      render: (value) => `${value} 年`,
+    },
+    {
+      title: '订单金额',
+      dataIndex: 'amount',
+      width: 120,
+      align: 'right',
+      render: (value) => (
+        <span className="amount-cell">{formatOrderAmount(value)}</span>
+      ),
+    },
+    {
+      title: '状态',
+      dataIndex: 'status',
+      width: 100,
+      render: (status) => <Tag color={statusColors[status]}>{status}</Tag>,
+    },
+    { title: '创建时间', dataIndex: 'createdAt', width: 172 },
+    {
+      title: '操作',
+      dataIndex: 'status',
+      fixed: 'right',
+      width: 92,
+      render: (status, order) =>
+        status === ORDER_STATUS.EXPIRED ? (
+          <Button
+            type="link"
+            onClick={() => openRenewModal([order.orderNo], 'single')}
+          >
+            续卡
+          </Button>
+        ) : (
+          <span className="muted">暂无</span>
+        ),
+    },
+  ]
 
   function clearSelection() {
     setSelectedRowKeys([])
@@ -213,6 +249,70 @@ function OrdersPage() {
     setFilters(emptyFilters)
     setPage(1)
     clearSelection()
+  }
+
+  function openRenewModal(orderNos, mode = 'batch') {
+    setRenewalYears(1)
+    setRenewTarget({ mode, orderNos })
+  }
+
+  function closeRenewModal() {
+    if (!renewSubmitting) setRenewTarget(null)
+  }
+
+  function refreshAfterMutation() {
+    setPage(1)
+    clearSelection()
+    setRefreshVersion((version) => version + 1)
+  }
+
+  async function handleRenewSubmit() {
+    if (renewalOrderNos.length === 0) return
+
+    setRenewSubmitting(true)
+    try {
+      await renewOrders(renewalOrderNos, renewalYears)
+      setRenewTarget(null)
+      refreshAfterMutation()
+      message.success(
+        renewalOrderNos.length === 1
+          ? '订单续卡成功'
+          : `已成功续卡 ${renewalOrderNos.length} 笔订单`,
+      )
+    } catch (error) {
+      showBatchError('续卡', error)
+    } finally {
+      setRenewSubmitting(false)
+    }
+  }
+
+  function handleCancelSelected() {
+    const orderNos = [...selectedRowKeys]
+
+    Modal.confirm({
+      title: `确认撤销所选 ${orderNos.length} 笔订单？`,
+      content: (
+        <div className="cancel-confirm-content">
+          <p>全部订单均符合条件时才会整批撤单，否则不会修改任何订单。</p>
+          <div className="order-number-list">{orderNos.join('、')}</div>
+        </div>
+      ),
+      okText: '确认撤单',
+      okButtonProps: { danger: true },
+      cancelText: '暂不撤单',
+      async onOk() {
+        setCancelSubmitting(true)
+        try {
+          await cancelOrders(orderNos)
+          refreshAfterMutation()
+          message.success(`已成功撤销 ${orderNos.length} 笔订单`)
+        } catch (error) {
+          showBatchError('撤单', error)
+        } finally {
+          setCancelSubmitting(false)
+        }
+      },
+    })
   }
 
   return (
@@ -283,11 +383,16 @@ function OrdersPage() {
           <Space wrap>
             <Button
               disabled={selectedRowKeys.length === 0}
-              onClick={() => setRenewOpen(true)}
+              onClick={() => openRenewModal([...selectedRowKeys])}
             >
               批量续卡
             </Button>
-            <Button danger disabled={selectedRowKeys.length === 0}>
+            <Button
+              danger
+              disabled={selectedRowKeys.length === 0}
+              loading={cancelSubmitting}
+              onClick={handleCancelSelected}
+            >
               一键撤单
             </Button>
             <Typography.Text type="secondary">
@@ -337,24 +442,27 @@ function OrdersPage() {
       </div>
 
       <Modal
-        title="批量续卡"
-        open={renewOpen}
-        onCancel={() => setRenewOpen(false)}
-        onOk={() => setRenewOpen(false)}
+        title={renewTarget?.mode === 'single' ? '订单续卡' : '批量续卡'}
+        open={Boolean(renewTarget)}
+        onCancel={closeRenewModal}
+        onOk={handleRenewSubmit}
+        confirmLoading={renewSubmitting}
+        maskClosable={!renewSubmitting}
         okText="确认续卡"
         cancelText="取消"
       >
         <div className="renew-summary">
-          <span>已选择 {selectedRowKeys.length} 笔订单</span>
+          <span>本次续卡 {renewalOrderNos.length} 笔订单</span>
           <strong>
-            {selectedSummary}
-            {selectedRowKeys.length > 3 ? ' 等' : ''}
+            {renewalOrderSummary}
+            {renewalOrderNos.length > 3 ? ' 等' : ''}
           </strong>
         </div>
         <Form layout="vertical">
           <Form.Item label="续卡年限" required>
             <Select
-              defaultValue={5}
+              value={renewalYears}
+              onChange={setRenewalYears}
               options={[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((value) => ({
                 value,
                 label: `${value} 年${value >= 5 ? '（8 折）' : ''}`,
@@ -365,11 +473,11 @@ function OrdersPage() {
         <div className="fee-breakdown">
           <div>
             <span>单笔续卡费用</span>
-            <strong>4,800.00 元</strong>
+            <strong>{formatOrderAmount(singleRenewalFee)} 元</strong>
           </div>
           <div>
             <span>本次总费用</span>
-            <strong>待确认</strong>
+            <strong>{formatOrderAmount(batchRenewalTotal)} 元</strong>
           </div>
         </div>
       </Modal>

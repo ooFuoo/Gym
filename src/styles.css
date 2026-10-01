@@ -298,6 +298,23 @@ textarea {
   font-family: 'SFMono-Regular', Consolas, monospace;
   font-size: 13px;
 }
+.order-number-list {
+  max-height: 120px;
+  padding: 10px 12px;
+  overflow: auto;
+  border-radius: 8px;
+  background: #f6f7f9;
+  color: #4b515c;
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.batch-error-content p,
+.cancel-confirm-content p {
+  margin: 8px 0 12px;
+  color: #6c727f;
+}
 .fee-breakdown {
   display: grid;
   grid-template-columns: 1fr 1fr;
